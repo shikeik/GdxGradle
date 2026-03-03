@@ -1,0 +1,46 @@
+plugins {
+    id 'groovy'
+    id 'java-gradle-plugin'
+    id 'maven-publish'
+}
+
+group = 'com.goldsprite.gdxgradle'
+version = projectVersion
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation gradleApi()
+    implementation localGroovy()
+}
+
+gradlePlugin {
+    plugins {
+        gdxTasks {
+            id = 'com.goldsprite.gdx-tasks'
+            implementationClass = 'com.goldsprite.gdxgradle.GdxTasksPlugin'
+        }
+    }
+}
+
+publishing {
+    publications {
+        // java-gradle-plugin 会自动创建 pluginMaven publication
+        // 这里额外配置 groupId 以兼容 JitPack
+        pluginMaven(MavenPublication) {
+            groupId = project.findProperty('jitpackGroup') ?: project.group
+            artifactId = rootProject.name
+            version = projectVersion
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
