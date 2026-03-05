@@ -1,0 +1,42 @@
+// === 共享 Composite Build 配置 ===
+// 所有同级项目共用的 autoIncludeLocalLib 函数
+// 用法: 在项目的 settings.gradle 中 apply from: new File(rootDir, '../GdxGradle/composite-build.settings.gradle')
+
+// 如果当前构建是被其他项目 includeBuild 引入的子构建，跳过所有 composite build 声明
+// 子构建的依赖替换由宿主项目统一管理，避免重复 includeBuild 和日志刷屏
+if (gradle.parent != null) {
+    ext.autoIncludeLocalLib = { String relativePath, String group, String umbrellaId -> /* 跳过 */ }
+    return
+}
+
+/**
+ * 自动 includeBuild + 自动 dependencySubstitution
+ * 解析库项目的 settings.gradle，提取 include ':xxx' 子模块，自动生成 substitute 规则
+ *
+ * @param relativePath  库项目相对路径 (e.g. '../GdxCore')
+ * @param group         子模块 Maven group (e.g. 'com.github.shikeik.GdxCore')
+ * @param umbrellaId    伞形 POM 的完整坐标 (e.g. 'com.github.shikeik:GdxCore')，无则传 null
+ */
+ext.autoIncludeLocalLib = { String relativePath, String group, String umbrellaId ->
+    def localDir = new File(rootDir, relativePath)
+    if (!localDir.exists()) return
+
+    println "[Settings] 检测到本地 ${localDir.name}，开启源码替换..."
+    includeBuild(localDir) {
+        dependencySubstitution {
+            // 解析库项目的 settings.gradle，提取所有 include ':xxx' 子模块
+            def libSettings = new File(localDir, 'settings.gradle')
+            libSettings.eachLine { line ->
+                def m = (line =~ /include\s+['"]:\s*(\w+)\s*['"]/)
+                if (m) {
+                    def mod = m[0][1]
+                    substitute module("${group}:${mod}") using project(":${mod}")
+                }
+            }
+            // 伞形 POM 替换（如有）
+            if (umbrellaId) {
+                substitute module(umbrellaId) using project(':')
+            }
+        }
+    }
+}
