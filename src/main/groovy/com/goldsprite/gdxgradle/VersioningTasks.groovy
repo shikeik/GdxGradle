@@ -8,8 +8,11 @@ import org.gradle.api.Project
 class VersioningTasks {
 
     static void register(Project project, GdxTasksExtension ext) {
-        def group = ext.taskGroup.get()
         def rootProject = project.rootProject
+
+        // 版本任务操作根 gradle.properties，只需在根项目注册一次
+        // 多子模块场景下，插件可能被多个子项目应用，跳过重复注册避免 bump N 次
+        if (rootProject.tasks.findByName('bumpPatch') != null) return
 
         def versionPropsFile = rootProject.file('gradle.properties')
         def androidBuildFile = rootProject.file('android/build.gradle')
@@ -60,25 +63,26 @@ class VersioningTasks {
             if (androidBuildFile.exists()) println "✅ android/build.gradle 已更新 (versionName & versionCode)"
         }
 
-        project.tasks.register('bumpPatch') {
+        // 注册到根项目，确保 gradlew bumpPatch 只执行一次
+        rootProject.tasks.register('bumpPatch') {
             it.group = 'versioning'
             it.description = '升级修订号 (Bug修复): 0.8.11 -> 0.8.12'
             it.doLast { updateVersion('patch') }
         }
 
-        project.tasks.register('bumpMinor') {
+        rootProject.tasks.register('bumpMinor') {
             it.group = 'versioning'
             it.description = '升级次版本号 (新功能): 0.8.11 -> 0.9.0'
             it.doLast { updateVersion('minor') }
         }
 
-        project.tasks.register('bumpMajor') {
+        rootProject.tasks.register('bumpMajor') {
             it.group = 'versioning'
             it.description = '升级主版本号 (重大更新): 0.8.11 -> 1.0.0'
             it.doLast { updateVersion('major') }
         }
 
-        project.tasks.register('printVersion') {
+        rootProject.tasks.register('printVersion') {
             it.group = 'versioning'
             it.description = '打印当前版本号'
             it.doLast {
