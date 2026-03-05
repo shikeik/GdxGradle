@@ -9,6 +9,12 @@ import org.gradle.api.Project
 class GitHookInstaller {
 
     static void install(Project project, GdxTasksExtension ext) {
+        // 如果当前是被 includeBuild 引入的 composite 子构建，跳过 hook 安装
+        // 避免构建宿主项目时越权修改被包含库项目的 git hook
+        if (project.gradle.parent != null) {
+            return
+        }
+
         def rootDir = project.rootProject.rootDir
         def gitHooksDir = new File(rootDir, '.git/hooks')
 
