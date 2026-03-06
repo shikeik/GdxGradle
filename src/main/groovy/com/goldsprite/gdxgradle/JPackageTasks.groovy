@@ -69,6 +69,9 @@ class JPackageTasks {
                 println "   - 输出目录: ${outputDir}"
                 println "   - 主类: ${mainClass}"
 
+                def withConsole = rootProject.hasProperty('console')
+                def consoleSuffix = withConsole ? '-console' : ''
+
                 def cmd = [
                     'jpackage',
                     '--type', 'app-image',
@@ -81,6 +84,10 @@ class JPackageTasks {
                     '--java-options', '-Xmx1G -Dfile.encoding=UTF-8',
                     '--verbose'
                 ]
+                if (withConsole) {
+                    cmd.add('--win-console')
+                    println "   - 模式: Console (带控制台窗口)"
+                }
 
                 runCommand(cmd, lwjgl3Project.projectDir)
 
@@ -128,8 +135,10 @@ class JPackageTasks {
 
                 def appName = rootProject.name
                 def projectVersion = rootProject.findProperty('projectVersion')
+                def withConsole = rootProject.hasProperty('console')
+                def consoleSuffix = withConsole ? '-console' : ''
                 def distDir = lwjgl3Project.file("${rootDir}/outputs/jpackage/${appName}")
-                def outputExe = lwjgl3Project.file("${rootDir}/outputs/${appName}_V${projectVersion}.exe")
+                def outputExe = lwjgl3Project.file("${rootDir}/outputs/${appName}_V${projectVersion}${consoleSuffix}.exe")
 
                 if (!evbPath || !lwjgl3Project.file(evbPath).exists()) {
                     println "\n⚠️ [警告] 无法执行单文件打包"
@@ -163,7 +172,7 @@ class JPackageTasks {
                                     if (f.name == 'app') {
                                         def defaultCfg = new File(f, "${appName}.cfg")
                                         if (defaultCfg.exists()) {
-                                            def versionedCfgName = "${appName}_V${projectVersion}.cfg"
+                                            def versionedCfgName = "${appName}_V${projectVersion}${consoleSuffix}.cfg"
                                             println "   - [Fix] 添加配置文件映射: ${versionedCfgName} -> ${defaultCfg.name}"
                                             builder.File {
                                                 Type('2')
