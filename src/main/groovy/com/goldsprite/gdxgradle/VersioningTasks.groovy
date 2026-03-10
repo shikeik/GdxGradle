@@ -227,6 +227,7 @@ public class BuildConfig {
 			}
 		}
 
-		syncAllVersions()
+		// 注意：不再自动执行 syncAllVersions()
+		// 需要手动运行 ./gradlew syncVersions
 	}
 }

@@ -16,6 +16,9 @@ abstract class GdxTasksExtension {
 	/** 任务分组名 (显示在 ./gradlew tasks 中的 group) */
 	abstract Property<String> getTaskGroup()
 
+	/** 是否在配置阶段自动执行 syncVersions (默认为 true) */
+	abstract Property<Boolean> getAutoSyncVersions()
+
 	/** assets 目录 (相对于 rootProject) */
 	abstract Property<String> getAssetsDir()
 
