@@ -125,7 +125,9 @@ fi
 		def sb = new StringBuilder()
 		sb.append("# 自动跳过模式（Merge、Revert等特殊提交）\n")
 		patterns.each { pattern ->
-			sb.append("if echo \"\$commit_msg\" | grep -qE '${pattern}'; then\n")
+			// 对单引号进行转义处理，避免 shell 语法错误
+			def escapedPattern = pattern.replace("'", "'\"'\"'")
+			sb.append("if echo \"\$commit_msg\" | grep -qE '${escapedPattern}'; then\n")
 			sb.append("    exit 0\n")
 			sb.append("fi\n")
 		}
