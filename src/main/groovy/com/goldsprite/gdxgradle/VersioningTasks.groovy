@@ -243,7 +243,57 @@ class VersioningTasks {
 				}
 			}
 
-			// 2. 同步 README.md
+			// 2. 同步 GdxGradle 的 BuildConfig（如果存在 included build）
+			def gdxGradleDir = rootProject.file('deps/GdxGradle')
+			if (gdxGradleDir.exists()) {
+				def gdxGradlePropsFile = new File(gdxGradleDir, 'gradle.properties')
+				def gdxBuildCountFile = new File(gdxGradleDir, 'build.properties')
+				
+				if (gdxGradlePropsFile.exists()) {
+					def gdxProps = new Properties()
+					gdxGradlePropsFile.withInputStream { gdxProps.load(it) }
+					def gdxPackage = gdxProps.getProperty('projectPackage', 'com.goldsprite.gdxgradle')
+					def gdxVersion = gdxProps.getProperty('projectVersion', '1.0.0')
+					def gdxJdk = gdxProps.getProperty('jdkVersion', '17')
+					
+					// 读取 GdxGradle 自己的 buildCount
+					def gdxBuildCount = 0
+					if (gdxBuildCountFile.exists()) {
+						def gdxCountProps = new Properties()
+						gdxBuildCountFile.withInputStream { gdxCountProps.load(it) }
+						gdxBuildCount = gdxCountProps.getProperty('buildCount', '0').toInteger()
+					}
+					
+					def gdxPackagePath = gdxPackage.replace('.', '/')
+					def gdxBuildConfigFile = new File(gdxGradleDir, "src/main/java/${gdxPackagePath}/BuildConfig.java")
+					
+					if (gdxBuildConfigFile.parentFile.exists() || gdxBuildConfigFile.parentFile.mkdirs()) {
+						gdxBuildConfigFile.text = """package ${gdxPackage};
+
+/**
+ * GdxGradle 构建配置
+ * 此文件由 Gradle 插件自动生成，请勿手动修改
+ */
+public class BuildConfig {
+	public static final String PROJECT_NAME = "GdxGradle";
+	public static final String DEV_VERSION = "${gdxVersion}";
+	public static final String JDK_VERSION = "${gdxJdk}";
+	
+	// 构建流水号（GdxGradle 独立计数）
+	public static final int BUILD_COUNT = ${gdxBuildCount};
+	public static final String DISPLAY_VERSION = "${gdxVersion}#${gdxBuildCount}";
+	
+	// 构建信息
+	public static final long BUILD_TIMESTAMP = ${System.currentTimeMillis()}L;
+	public static final String BUILD_TIME = "${new java.util.Date().format('yyyy-MM-dd HH:mm:ss')}";
+}
+"""
+						println "  ✅ GdxGradle BuildConfig.java 已同步 (buildCount: ${gdxBuildCount})"
+					}
+				}
+			}
+
+			// 3. 同步 README.md
 			if (readmeFile.exists()) {
 				def content = readmeFile.getText('UTF-8')
 				def updatedContent = content.replaceFirst(/^(# ${rootProject.name}.*V)(.*)/) {
@@ -253,7 +303,7 @@ class VersioningTasks {
 				println "  ✅ README.md 已同步"
 			}
 
-			// 3. 同步 android/build.gradle (解决 AIDE+ 硬编码问题)
+			// 4. 同步 android/build.gradle (解决 AIDE+ 硬编码问题)
 			if (androidBuildFile.exists()) {
 				def androidContent = androidBuildFile.getText('UTF-8')
 
