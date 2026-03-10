@@ -2,12 +2,29 @@ package com.goldsprite.gdxgradle
 
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.ListProperty
+import org.gradle.api.file.RegularFileProperty
 
 /**
  * GdxTasks 插件扩展配置。
  * 消费端通过 gdxTasks { ... } 块自定义行为。
  */
 abstract class GdxTasksExtension {
+
+	// ============================================================
+	// BuildConfig 配置
+	// ============================================================
+
+	/** BuildConfig 生成配置 */
+	final BuildConfigExtension buildConfig = new BuildConfigExtension()
+
+	/**
+	 * 配置 BuildConfig 生成
+	 * 用法：buildConfig { templateFile = file('path/to/template') }
+	 */
+	void buildConfig(Closure closure) {
+		closure.delegate = buildConfig
+		closure.call()
+	}
 
 	// ============================================================
 	// 通用配置
@@ -115,4 +132,12 @@ abstract class GdxTasksExtension {
 		currentList.addAll(list)
 		commitTypeDefs.set(currentList)
 	}
+}
+
+/**
+ * BuildConfig 生成配置
+ */
+class BuildConfigExtension {
+	/** 自定义模板文件路径 */
+	RegularFileProperty templateFile
 }

@@ -1,6 +1,7 @@
 package com.goldsprite.gdxgradle
 
 import org.gradle.api.Project
+import groovy.text.GStringTemplateEngine
 
 /**
  * 版本管理任务: bumpPatch, bumpMinor, bumpMajor, bumpBuild, syncVersions, printVersion
@@ -56,6 +57,73 @@ class VersioningTasks {
 			def propsContent = versionPropsFile.getText('UTF-8')
 			propsContent = propsContent.replaceAll(/projectVersion\s*=\s*.*/, "projectVersion=${newVersion}")
 			versionPropsFile.write(propsContent, 'UTF-8')
+		}
+
+		// 从版本号提取构建号
+		def getBuildNumber = { String version ->
+			def (parts, hasBuildSuffix) = parseVersion(version)
+			if (hasBuildSuffix && parts.size() >= 4) {
+				return parts[-1]
+			}
+			return 0
+		}
+
+		// ═══════════════════════════════════════════════════════════════
+		// 构建流水号管理
+		// ═══════════════════════════════════════════════════════════════
+
+		def buildCountFile = rootProject.file('build.properties')
+
+		// 读取当前构建流水号
+		def getBuildCount = {
+			if (!buildCountFile.exists()) return 0
+			def props = new Properties()
+			buildCountFile.withInputStream { props.load(it) }
+			return props.getProperty('buildCount', '0').toInteger()
+		}
+
+		// 读取上次同步的版本号
+		def getLastSyncedVersion = {
+			if (!buildCountFile.exists()) return ''
+			def props = new Properties()
+			buildCountFile.withInputStream { props.load(it) }
+			return props.getProperty('lastVersion', '')
+		}
+
+		// 更新上次同步的版本号
+		def updateLastSyncedVersion = { String version ->
+			def props = new Properties()
+			if (buildCountFile.exists()) {
+				buildCountFile.withInputStream { props.load(it) }
+			}
+			props.setProperty('lastVersion', version)
+			buildCountFile.withOutputStream { 
+				props.store(it, "项目总构建流水号\n每次构建产物或版本变更时自动递增，用于追踪项目生命周期内的总构建次数") 
+			}
+		}
+
+		// 递增构建流水号（带防重复标记）
+		def incrementBuildCount = {
+			// 防止一次 Gradle 构建周期内多次递增
+			if (rootProject.ext.has('buildCountIncremented')) {
+				return rootProject.ext.buildCount
+			}
+
+			def count = getBuildCount() + 1
+			def props = new Properties()
+			if (buildCountFile.exists()) {
+				buildCountFile.withInputStream { props.load(it) }
+			}
+			props.setProperty('buildCount', count.toString())
+			buildCountFile.withOutputStream { 
+				props.store(it, "项目总构建流水号\n每次构建产物或版本变更时自动递增，用于追踪项目生命周期内的总构建次数") 
+			}
+
+			rootProject.ext.buildCountIncremented = true
+			rootProject.ext.buildCount = count
+
+			println "🔢 构建流水号递增: #${count}"
+			return count
 		}
 
 		// ═══════════════════════════════════════════════════════════════
@@ -117,8 +185,18 @@ class VersioningTasks {
 		def syncAllVersions = {
 			def projectVersion = getCurrentVersion()
 			def projectPackage = getProjectProperty('projectPackage')
+			def jdkVersion = getProjectProperty('jdkVersion') ?: "17"
+			def buildNumber = getBuildNumber(projectVersion)
 
-			println "🔄 开始同步版本号: $projectVersion"
+			// 检测版本变化，变化时递增构建号
+			def lastSyncedVersion = getLastSyncedVersion()
+			if (lastSyncedVersion != projectVersion) {
+				incrementBuildCount()
+				updateLastSyncedVersion(projectVersion)
+			}
+			def buildCount = getBuildCount()
+
+			println "🔄 开始同步版本号: $projectVersion (构建流水号: #${buildCount})"
 
 			// 1. 同步 BuildConfig.java
 			if (projectPackage != null) {
@@ -126,14 +204,42 @@ class VersioningTasks {
 				def buildConfigFile = rootProject.file("core/src/main/java/${packagePath}/BuildConfig.java")
 
 				if (buildConfigFile.parentFile.exists() || buildConfigFile.parentFile.mkdirs()) {
-					def jdkVersion = getProjectProperty('jdkVersion') ?: "17"
-					buildConfigFile.text = """package ${projectPackage};
-public class BuildConfig {
-	public static final String PROJECT_NAME = "${rootProject.name}";
-	public static final String DEV_VERSION = "${projectVersion}";
-	public static final String JDK_VERSION = "${jdkVersion}";
-}"""
-					println "  ✅ BuildConfig.java 已同步"
+					def template
+
+					// 检查用户自定义模板
+					def customTemplateFile = ext.buildConfig?.templateFile?.getOrNull()
+					if (customTemplateFile?.exists()) {
+						template = customTemplateFile.text
+						println "  📄 使用自定义模板: ${customTemplateFile}"
+					} else {
+						// 加载内置模板
+						def stream = getClass().getResourceAsStream("/templates/BuildConfig.java.groovy")
+						if (stream == null) {
+							throw new RuntimeException("找不到内置模板: /templates/BuildConfig.java.groovy")
+						}
+						template = stream.text
+					}
+
+					// 构建渲染上下文
+					def ctx = [
+						rootProject: rootProject,
+						projectName: rootProject.name,
+						projectVersion: projectVersion,
+						projectPackage: projectPackage,
+						jdkVersion: jdkVersion,
+						buildNumber: buildNumber,
+						buildCount: buildCount
+					]
+
+					try {
+						def engine = new GStringTemplateEngine()
+						def result = engine.createTemplate(template).make(ctx)
+						buildConfigFile.text = result.toString()
+						println "  ✅ BuildConfig.java 已同步"
+					} catch (Exception e) {
+						println "  ❌ BuildConfig.java 生成失败: ${e.message}"
+						throw e
+					}
 				}
 			}
 
@@ -177,6 +283,13 @@ public class BuildConfig {
 		// 注册任务
 		// ═══════════════════════════════════════════════════════════════
 
+		// markBuildRelease 任务：标记构建产物生成，递增流水号
+		rootProject.tasks.register('markBuildRelease') {
+			it.group = 'build'
+			it.description = '标记构建产物生成，递增构建流水号'
+			it.doLast { incrementBuildCount() }
+		}
+
 		// bumpBuild 任务：添加或递增 build 版本号
 		rootProject.tasks.register('bumpBuild') {
 			it.group = 'versioning'
@@ -189,11 +302,7 @@ public class BuildConfig {
 		rootProject.tasks.register('bumpPatch') {
 			it.group = 'versioning'
 			it.description = '升级修订号 (Bug修复): 0.8.11 -> 0.8.12 (自动去除 _build 后缀)'
-			it.doLast {
-				bumpVersion('patch')
-				// 由于 gradle 配置阶段已结束，需要手动调用同步
-				// 使用 finalizedBy 或 dependsOn 确保 syncVersions 执行
-			}
+			it.doLast { bumpVersion('patch') }
 			it.finalizedBy 'syncVersions'
 		}
 
