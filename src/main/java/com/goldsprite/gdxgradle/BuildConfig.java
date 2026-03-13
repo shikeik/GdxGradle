@@ -14,6 +14,6 @@ public class BuildConfig {
 	public static final String DISPLAY_VERSION = "1.0.0#0";
 	
 	// 构建信息
-	public static final long BUILD_TIMESTAMP = 1773417882410L;
-	public static final String BUILD_TIME = "2026-03-14 00:04:42";
+	public static final long BUILD_TIMESTAMP = 1773437307227L;
+	public static final String BUILD_TIME = "2026-03-14 05:28:27";
 }
